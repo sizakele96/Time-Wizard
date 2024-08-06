@@ -1,0 +1,197 @@
+## Backend (Flask)
+### 1. Install Dependencies
+pip install flask flask_sqlalchemy flask_marshmallow marshmallow-sqlalchemy
+
+### 2. Create the Flask App
+
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+import os
+
+### Initialize app
+app = Flask(__name__)
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+### Database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'timesheets.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+### Initialize db
+db = SQLAlchemy(app)
+
+### Initialize ma
+ma = Marshmallow(app)
+
+### Timesheet Class/Model
+class Timesheet(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.String(100), unique=False)
+    employee_name = db.Column(db.String(100))
+    week_ending = db.Column(db.String(100))
+    hours_worked = db.Column(db.Float)
+    client = db.Column(db.String(200))
+    engagement_name = db.Column(db.String(200))
+    engagement_activity = db.Column(db.String(200))
+
+    def __init__(self, employee_id, employee_name, week_ending, hours_worked, client, engagement_name, engagement_activity):
+        self.employee_id = employee_id
+        self.employee_name = employee_name
+        self.week_ending = week_ending
+        self.hours_worked = hours_worked
+        self.client = client
+        self.engagement_name = engagement_name
+        self.engagement_activity = engagement_activity
+
+### Timesheet Schema
+class TimesheetSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = Timesheet
+
+### Initialize schema
+timesheet_schema = TimesheetSchema()
+timesheets_schema = TimesheetSchema(many=True)
+
+### Create a Timesheet
+@app.route('/timesheet', methods=['POST'])
+def add_timesheet():
+    employee_id = request.json['employee_id']
+    employee_name = request.json['employee_name']
+    week_ending = request.json['week_ending']
+    hours_worked = request.json['hours_worked']
+    client = request.json['client']
+    engagement_name = request.json['engagement_name']
+    engagement_activity = request.json['engagement_activity']
+
+    new_timesheet = Timesheet(employee_id, employee_name, week_ending, hours_worked, client, engagement_name, engagement_activity)
+
+    db.session.add(new_timesheet)
+    db.session.commit()
+
+    return timesheet_schema.jsonify(new_timesheet)
+
+### Get All Timesheets
+@app.route('/timesheet', methods=['GET'])
+def get_timesheets():
+    all_timesheets = Timesheet.query.all()
+    result = timesheets_schema.dump(all_timesheets)
+    return jsonify(result)
+
+### Get Single Timesheet
+@app.route('/timesheet/<id>', methods=['GET'])
+def get_timesheet(id):
+    timesheet = Timesheet.query.get(id)
+    return timesheet_schema.jsonify(timesheet)
+
+### Update a Timesheet
+@app.route('/timesheet/<id>', methods=['PUT'])
+def update_timesheet(id):
+    timesheet = Timesheet.query.get(id)
+
+    employee_id = request.json['employee_id']
+    employee_name = request.json['employee_name']
+    week_ending = request.json['week_ending']
+    hours_worked = request.json['hours_worked']
+    client = request.json['client']
+    engagement_name = request.json['engagement_name']
+    engagement_activity = request.json['engagement_activity']
+
+    timesheet.employee_id = employee_id
+    timesheet.employee_name = employee_name
+    timesheet.week_ending = week_ending
+    timesheet.hours_worked = hours_worked
+    timesheet.client = client
+    timesheet.engagement_name = engagement_name
+    timesheet.engagement_activity = engagement_activity
+
+    db.session.commit()
+
+    return timesheet_schema.jsonify(timesheet)
+
+### Delete Timesheet
+@app.route('/timesheet/<id>', methods=['DELETE'])
+def delete_timesheet(id):
+    timesheet = Timesheet.query.get(id)
+    db.session.delete(timesheet)
+    db.session.commit()
+
+    return timesheet_schema.jsonify(timesheet)
+
+### Run Server
+if __name__ == '__main__':
+    app.run(debug=True)
+
+## 3. Initialize the Database
+
+Run these commands in a Python shell to create the database:
+from app import db
+db.create_all()
+
+# Frontend (HTML/CSS/JavaScript)
+Use a simple HTML form to interact with the Flask API.
+
+### index.html
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Timesheets</title>
+    <script>
+        async function submitTimesheet() {
+            const employeeId = document.getElementById('employee_id').value;
+            const weekEnding = document.getElementById('week_ending').value;
+            const hoursWorked = document.getElementById('hours_worked').value;
+            const tasks = document.getElementById('tasks').value;
+
+            const response = await fetch('/timesheet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    employee_id: employeeId,
+                    week_ending: weekEnding,
+                    hours_worked: hoursWorked,
+                    tasks: tasks,
+                }),
+            });
+
+            const result = await response.json();
+            console.log(result);
+        }
+    </script>
+</head>
+<body>
+    <h1>Submit Timesheet</h1>
+    <form onsubmit="event.preventDefault(); submitTimesheet();">
+        <label for="employee_id">Employee ID:</label><br>
+        <input type="text" id="employee_id" name="employee_id"><br>
+        <input type="text" id="employee_name" name="employee_name"><br>
+        <label for="week_ending">Week Ending:</label><br>
+        <input type="text" id="week_ending" name="week_ending"><br>
+        <label for="hours_worked">Hours Worked:</label><br>
+        <input type="number" id="hours_worked" name="hours_worked"><br>
+        <label for="client">Tasks:</label><br>
+        <input type="text" id="client" name="client"><br><br>
+        <label for="engagement_name">Tasks:</label><br>
+        <input type="text" id="engagement_name" name="engagement_name"><br><br>
+        <label for="engagement_activity">Tasks:</label><br>
+        <input type="text" id="engagement_activity" name="engagement_activity"><br><br>
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>
+
+### To serve this HTML file, update the Flask app:
+
+### from flask import render_template
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+# Running the Application
+### Run your Flask server:
+python app.py
+
+Open your browser and navigate to http://localhost:5000.
